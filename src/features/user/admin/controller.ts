@@ -64,7 +64,7 @@ export const adminLogin = asyncHandler(async (req: Request, res: Response) => {
 
   const data = exclude(admin._doc, ["password", "createdAt", "updatedAt"]);
 
-  return apiResponse(res, 200, true, "Admin Login Successfully!", data);
+  return apiResponse(res, 200, true, "Admin Login Successfully!", { ...data, role: ROLE.ADMIN });
 });
 
 /**

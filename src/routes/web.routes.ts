@@ -1,11 +1,13 @@
 import express from "express";
-import { refreshAccessToken, tokenVerify } from "../features/user/controller";
-import retailerAuthRoutes from "../features/user/retailer/route";
+import { getUserProfile, refreshAccessToken, userLogout, verifyToken } from "../features/user/controller";
+import { authAndPermissionCheck } from "../middlewares/authMiddleware";
 
 const router = express.Router();
 
-router.use("/token-verify", tokenVerify);
-router.use("/refresh-token", refreshAccessToken);
-router.use("/user", retailerAuthRoutes);
+// Common Routes
+router.get("/verify-token", authAndPermissionCheck("", false, false), verifyToken);
+router.get("/refresh-token", authAndPermissionCheck("", false), refreshAccessToken);
+router.get("/user-profile", authAndPermissionCheck("", false), getUserProfile);
+router.post("/user-logout", authAndPermissionCheck("", false), userLogout);
 
 export default router;
