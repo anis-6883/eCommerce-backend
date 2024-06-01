@@ -1,10 +1,10 @@
 import express from "express";
-import { authCheck, refreshAccessToken } from "../features/user/controller";
+import { refreshAccessToken, tokenVerify } from "../features/user/controller";
 import retailerAuthRoutes from "../features/user/retailer/route";
 
 const router = express.Router();
 
-router.use("/auth-check", authCheck);
+router.use("/token-verify", tokenVerify);
 router.use("/refresh-token", refreshAccessToken);
 router.use("/user", retailerAuthRoutes);
 

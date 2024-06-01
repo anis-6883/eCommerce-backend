@@ -31,6 +31,7 @@ export interface IUser {
 
 export interface IApiRequest extends Request {
   user?: IUser;
-  otp?: string;
-  token?: string;
+  otp: string;
+  token: string;
+  role: string;
 }

@@ -47,6 +47,6 @@ const schema = new mongoose.Schema(
 //     return JSON.parse(JSON.stringify(user).replace(/_id/g, "id"));
 // };
 
-const SuperAdmin = mongoose.model("SuperAdmin", schema);
+const Admin = mongoose.model("Admin", schema);
 
-export default SuperAdmin;
+export default Admin;

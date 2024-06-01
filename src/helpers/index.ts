@@ -61,11 +61,11 @@ export const excludeMany = async (array: any[], keys: any[]): Promise<any[]> => 
   return newArray;
 };
 
-export const exclude = (existingApp: { [key: string]: any }, keys: any[]) => {
+export const exclude = (doc: { [key: string]: any }, keys: any[]) => {
   for (let key of keys) {
-    delete existingApp[key];
+    delete doc[key];
   }
-  return existingApp;
+  return doc;
 };
 
 export const getRandomInteger = (min: number, max: number) => {

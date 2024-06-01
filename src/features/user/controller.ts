@@ -3,10 +3,9 @@ import jwt from "jsonwebtoken";
 import { Model } from "mongoose";
 import { COOKIE_KEY, REFRESH_TOKEN_KEY } from "../../configs/constants";
 import { apiResponse, asyncHandler, generateSignature } from "../../helpers";
+import Admin from "./admin/model";
 import Customer from "./customer/model";
 import Retailer from "./retailer/model";
-import SubAdmin from "./sub-admin/model";
-import SuperAdmin from "./super-admin/model";
 
 /**
  * Verify Access Token
@@ -14,7 +13,7 @@ import SuperAdmin from "./super-admin/model";
  * @param {Response} res - The HTTP response object.
  * @returns {Promise<void>} - A promise that resolves when the response is sent.
  */
-export const authCheck = asyncHandler(async (req: Request, res: Response) => {
+export const tokenVerify = asyncHandler(async (req: Request, res: Response) => {
   const token = req?.cookies?.[COOKIE_KEY] || req.headers?.authorization?.replace("Bearer ", "");
   if (!token) return apiResponse(res, 401, false, "Unauthorized!");
 
@@ -22,14 +21,11 @@ export const authCheck = asyncHandler(async (req: Request, res: Response) => {
   let model: Model<any>;
 
   switch (decoded.role) {
-    case "super-admin":
-      model = SuperAdmin;
+    case "admin":
+      model = Admin;
       break;
     case "retailer":
       model = Retailer;
-      break;
-    case "sub-admin":
-      model = SubAdmin;
       break;
     case "customer":
       model = Customer;
@@ -58,14 +54,11 @@ export const refreshAccessToken = asyncHandler(async (req: Request, res: Respons
   let model: Model<any>;
 
   switch (decoded.role) {
-    case "super-admin":
-      model = SuperAdmin;
+    case "admin":
+      model = Admin;
       break;
     case "retailer":
       model = Retailer;
-      break;
-    case "sub-admin":
-      model = SubAdmin;
       break;
     case "customer":
       model = Customer;
