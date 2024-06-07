@@ -27,6 +27,8 @@ export interface IUser {
   updatedAt: Date;
   otp?: number;
   otpExpiry?: Date;
+  isVerified: boolean;
+  verifiedAt: Date;
 }
 
 export interface IApiRequest extends Request {

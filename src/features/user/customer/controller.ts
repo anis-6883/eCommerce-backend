@@ -1,69 +1,88 @@
 import bcrypt from "bcrypt";
 import { Request, Response } from "express";
-import _ from "lodash";
-import { COOKIE_KEY, REFRESH_TOKEN_KEY } from "../../../configs/constants";
-import { apiResponse, asyncHandler, generateSignature, getRandomInteger, validateBody } from "../../../helpers";
+import { COOKIE_KEY, REFRESH_TOKEN_KEY, ROLE } from "../../../configs/constants";
+import { apiResponse, asyncHandler, exclude, generateSignature, getRandomInteger } from "../../../helpers";
+import { IApiRequest, IUser } from "../../../types";
 import { sendVerificationEmail } from "../service";
-import { loginSchema, retailerRegisterSchema } from "../validation";
-import Retailer from "./model";
+import { customerRegisterSchema, loginSchema, verifyOtpSchema } from "../validation";
+import Customer from "./model";
 
 /**
- * Retailer Registration
+ * Customer Registration & Send Otp
  * @param {Request} req - The HTTP request object.
  * @param {Response} res - The HTTP response object.
  * @returns {Promise<void>} - A promise that resolves when the response is sent.
  */
-export const retailerRegistration = asyncHandler(async (req: Request, res: Response) => {
-  const result = validateBody(retailerRegisterSchema, req.body);
-  if (!_.isEmpty(result)) return apiResponse(res, 400, false, "Invalid Request!", result);
+export const customerRegistration = asyncHandler(async (req: Request, res: Response) => {
+  const result = await customerRegisterSchema.validateAsync(req.body);
 
-  const existingAdmin = await Retailer.findOne({ email: req.body.email });
-  if (existingAdmin) return apiResponse(res, 400, false, "This retailer already exists!");
+  const { otp, otpExpiry, isVerified, verifiedAt, image, ref, ...customerBody } = result;
 
-  const { storeName, firstName, lastName, email, phone, country, city, province, postalCode, address } = req.body;
+  customerBody.password = await bcrypt.hash(customerBody.password, 10);
+  customerBody.otp = getRandomInteger(100000, 999999);
+  customerBody.otpExpiry = new Date(Date.now() + 2 * 60 * 1000); // 2 min
 
-  const password = await bcrypt.hash(req.body.password, 10);
-  const otp = getRandomInteger(100000, 999999);
+  const existingCustomer: IUser = await Customer.findOne({ email: customerBody.email });
 
-  await Retailer.create({
-    storeName,
-    firstName,
-    lastName,
-    email,
-    password,
-    phone,
-    country,
-    city,
-    province,
-    postalCode,
-    address,
-    otp,
-    otpExpiry: new Date(new Date().getTime() + 2 * 60 * 1000),
+  if (existingCustomer && existingCustomer.isVerified) {
+    return apiResponse(res, 400, false, "This customer already exists!");
+  }
+
+  if (existingCustomer) {
+    await Customer.updateOne(
+      { email: customerBody.email },
+      { otp: customerBody.otp, otpExpiry: customerBody.otpExpiry }
+    );
+  } else {
+    await Customer.create(customerBody);
+  }
+
+  const tempToken = generateSignature({ email: customerBody.email, role: ROLE.CUSTOMER }, "15m"); // 15 min
+
+  res.cookie("temp", tempToken, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "development" ? false : true,
+    sameSite: process.env.NODE_ENV === "development" ? "lax" : "none",
+    expires: new Date(Date.now() + 24 * 60 * 60 * 1000),
   });
 
-  sendVerificationEmail(req.body.email, otp);
+  sendVerificationEmail(customerBody.email, customerBody.otp);
 
   return apiResponse(res, 201, true, "Otp send successfully!");
 });
 
 /**
- * Retailer Login
+ * Customer Otp Verify & Login
  * @param {Request} req - The HTTP request object.
  * @param {Response} res - The HTTP response object.
  * @returns {Promise<void>} - A promise that resolves when the response is sent.
  */
-export const retailerLogin = asyncHandler(async (req: Request, res: Response) => {
-  const result = validateBody(loginSchema, req.body);
-  if (!result) return apiResponse(res, 400, false, "Invalid Request!");
+export const customerOtpVerify = asyncHandler(async (req: IApiRequest, res: Response) => {
+  const result = await verifyOtpSchema.validateAsync(req.body);
 
-  const retailer: any = await Retailer.findOne({ email: req.body.email });
-  if (!retailer) return apiResponse(res, 401, false, "Invalid Credentials!");
+  if (req.user.isVerified) {
+    return apiResponse(res, 400, false, "This customer already verified!");
+  }
 
-  const isPasswordValid = await bcrypt.compare(req.body.password, retailer.password);
-  if (!isPasswordValid) return apiResponse(res, 401, false, "Invalid Credentials!");
+  const isVerified = req.user.otp === Number(result.otp) && req.user.otpExpiry > new Date();
+  if (!isVerified) return apiResponse(res, 400, false, "Invalid OTP!");
 
-  const accessToken = generateSignature({ email: retailer.email }, "1d");
-  const refreshToken = generateSignature({ email: retailer.email }, "7d");
+  await Customer.updateOne(
+    { email: req.user.email },
+    { isVerified: true, verifiedAt: new Date(), otp: null, otpExpiry: null }
+  );
+
+  const customer = await Customer.findOneAndUpdate(
+    { email: req.user.email },
+    { isVerified: true, verifiedAt: new Date(), otp: null, otpExpiry: null },
+    {
+      new: true,
+      projection: { password: 0, otp: 0, otpExpiry: 0 },
+    }
+  );
+
+  const accessToken = generateSignature({ email: req.user.email, role: ROLE.CUSTOMER }, "1d");
+  const refreshToken = generateSignature({ email: req.user.email, role: ROLE.CUSTOMER }, "7d");
 
   res.cookie(COOKIE_KEY, accessToken, {
     httpOnly: true,
@@ -79,34 +98,96 @@ export const retailerLogin = asyncHandler(async (req: Request, res: Response) =>
     expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
   });
 
-  // Remove Field
-  delete retailer._doc.password;
-  delete retailer._doc.createdAt;
-  delete retailer._doc.updatedAt;
+  // Clear Temporary Token
+  res.clearCookie("temp", {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "development" ? false : true,
+    sameSite: process.env.NODE_ENV === "development" ? "lax" : "none",
+    expires: new Date(Date.now()),
+  });
 
-  return apiResponse(res, 200, true, "Retailer Login Successfully!", retailer);
+  return apiResponse(res, 200, true, "Otp verified successfully!", customer);
 });
 
 /**
- * Retailer Logout
+ * Customer Resend Otp
  * @param {Request} req - The HTTP request object.
  * @param {Response} res - The HTTP response object.
  * @returns {Promise<void>} - A promise that resolves when the response is sent.
  */
-export const retailerLogout = asyncHandler(async (_req: Request, res: Response) => {
-  res.clearCookie(COOKIE_KEY, {
+export const customerResendOtp = asyncHandler(async (req: IApiRequest, res: Response) => {
+  const otp = getRandomInteger(100000, 999999);
+  const otpExpiry = new Date(Date.now() + 2 * 60 * 1000); // 2 min
+
+  if (req.user.isVerified) {
+    return apiResponse(res, 400, false, "This customer already verified!");
+  }
+
+  if (req.user.otpExpiry > new Date()) {
+    return apiResponse(res, 400, false, "Please, wait for 2 minutes before resend otp!");
+  }
+
+  await Customer.updateOne({ email: req.user.email }, { $set: { otp, otpExpiry } });
+
+  sendVerificationEmail(req.user.email, otp);
+
+  return apiResponse(res, 200, true, "Otp resend successfully!");
+});
+
+/**
+ * Customer Login
+ * @param {Request} req - The HTTP request object.
+ * @param {Response} res - The HTTP response object.
+ * @returns {Promise<void>} - A promise that resolves when the response is sent.
+ */
+export const customerLogin = asyncHandler(async (req: Request, res: Response) => {
+  const result = await loginSchema.validateAsync(req.body, {
+    abortEarly: false,
+  });
+
+  const customer: any = await Customer.findOne({ email: result.email });
+  if (!customer) return apiResponse(res, 401, false, "Please, complete your registration first!");
+
+  if (!customer.isVerified) {
+    await Customer.deleteOne({ email: result.email });
+    return apiResponse(res, 401, false, "Please, complete your registration first!");
+  }
+
+  const isPasswordValid = await bcrypt.compare(result.password, customer.password);
+  if (!isPasswordValid) return apiResponse(res, 401, false, "Invalid Credentials!");
+
+  const accessToken = generateSignature({ email: customer.email, role: ROLE.CUSTOMER }, "1d");
+  const refreshToken = generateSignature({ email: customer.email, role: ROLE.CUSTOMER }, "7d");
+
+  res.cookie(COOKIE_KEY, accessToken, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "development" ? false : true,
     sameSite: process.env.NODE_ENV === "development" ? "lax" : "none",
-    expires: new Date(Date.now()),
+    expires: new Date(Date.now() + 24 * 60 * 60 * 1000),
   });
 
-  res.clearCookie(REFRESH_TOKEN_KEY, {
+  res.cookie(REFRESH_TOKEN_KEY, refreshToken, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "development" ? false : true,
     sameSite: process.env.NODE_ENV === "development" ? "lax" : "none",
-    expires: new Date(Date.now()),
+    expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
   });
 
-  return apiResponse(res, 200, true, "Retailer Logout Successfully!");
+  // Remove Sensitive Data
+  const data = exclude(customer._doc, ["password", "otp", "otpExpiry"]);
+
+  return apiResponse(res, 200, true, "Customer Login Successfully!", data);
+});
+
+/**
+ * Customer Profile
+ * @param {Request} req - The HTTP request object.
+ * @param {Response} res - The HTTP response object.
+ * @returns {Promise<void>} - A promise that resolves when the response is sent.
+ */
+export const customerProfile = asyncHandler(async (req: IApiRequest, res: Response) => {
+  // Remove Sensitive Data
+  const data = exclude(req.user, ["password", "otp", "otpExpiry"]);
+
+  return apiResponse(res, 200, true, "Customer Profile", data);
 });

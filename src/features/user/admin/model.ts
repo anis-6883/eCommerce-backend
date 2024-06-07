@@ -2,15 +2,10 @@ import mongoose from "mongoose";
 
 const schema = new mongoose.Schema(
   {
-    firstName: {
+    fullName: {
       type: String,
       required: true,
       trim: true,
-    },
-    lastName: {
-      type: String,
-      trim: true,
-      default: null,
     },
     email: {
       type: String,

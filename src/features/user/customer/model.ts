@@ -14,6 +14,23 @@ const schema = new mongoose.Schema(
       trim: true,
       index: true,
     },
+    otp: {
+      type: Number,
+      trim: true,
+      default: null,
+    },
+    otpExpiry: {
+      type: Date,
+      default: null,
+    },
+    isVerified: {
+      type: Boolean,
+      default: false,
+    },
+    verifiedAt: {
+      type: Date,
+      default: null,
+    },
     password: {
       type: String,
       required: true,
@@ -22,19 +39,14 @@ const schema = new mongoose.Schema(
       type: String,
       default: null,
     },
+    status: {
+      type: Boolean,
+      default: true,
+    },
     phone: {
       type: String,
       trim: true,
       default: null,
-    },
-    country: {
-      type: String,
-      trim: true,
-      default: null,
-    },
-    status: {
-      type: Boolean,
-      default: true,
     },
   },
   {

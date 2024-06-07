@@ -4,7 +4,6 @@ import { Model } from "mongoose";
 import { COOKIE_KEY, ROLE } from "../configs/constants";
 import Admin from "../features/user/admin/model";
 import Customer from "../features/user/customer/model";
-import Retailer from "../features/user/retailer/model";
 import { apiResponse } from "../helpers";
 import { IApiRequest } from "../types";
 
@@ -27,9 +26,6 @@ export const authAndPermissionCheck =
         switch (decoded.role) {
           case ROLE.ADMIN:
             model = Admin;
-            break;
-          case ROLE.RETAILER:
-            model = Retailer;
             break;
           case ROLE.CUSTOMER:
             model = Customer;

@@ -1,9 +1,8 @@
 import bcrypt from "bcrypt";
 import { Request, Response } from "express";
-import _ from "lodash";
 import { IApiRequest } from "types";
 import { COOKIE_KEY, REFRESH_TOKEN_KEY, ROLE } from "../../../configs/constants";
-import { apiResponse, asyncHandler, exclude, generateSignature, validateBody } from "../../../helpers";
+import { apiResponse, asyncHandler, exclude, generateSignature } from "../../../helpers";
 import { adminRegisterSchema, loginSchema } from "../validation";
 import Admin from "./model";
 
@@ -14,15 +13,14 @@ import Admin from "./model";
  * @returns {Promise<void>} - A promise that resolves when the response is sent.
  */
 export const adminRegistration = asyncHandler(async (req: Request, res: Response) => {
-  const result = validateBody(adminRegisterSchema, req.body);
-  if (!_.isEmpty(result)) return apiResponse(res, 400, false, "Invalid Request!", result);
+  const result = await adminRegisterSchema.validateAsync(req.body);
 
-  const existingAdmin = await Admin.findOne({ email: req.body.email });
+  const existingAdmin = await Admin.findOne({ email: result.email });
   if (existingAdmin) return apiResponse(res, 400, false, "This Admin already exists!");
 
-  req.body.password = await bcrypt.hash(req.body.password, 10);
+  result.password = await bcrypt.hash(result.password, 10);
 
-  const admin: any = await Admin.create(req.body);
+  const admin: any = await Admin.create(result);
 
   const data = exclude(admin._doc, ["password", "createdAt", "updatedAt"]);
 
@@ -36,13 +34,12 @@ export const adminRegistration = asyncHandler(async (req: Request, res: Response
  * @returns {Promise<void>} - A promise that resolves when the response is sent.
  */
 export const adminLogin = asyncHandler(async (req: Request, res: Response) => {
-  const result = validateBody(loginSchema, req.body);
-  if (!result) return apiResponse(res, 400, false, "Invalid Request!");
+  const result = await loginSchema.validateAsync(req.body);
 
-  const admin: any = await Admin.findOne({ email: req.body.email });
+  const admin: any = await Admin.findOne({ email: result.email });
   if (!admin) return apiResponse(res, 401, false, "Invalid Credentials!");
 
-  const isPasswordValid = await bcrypt.compare(req.body.password, admin.password);
+  const isPasswordValid = await bcrypt.compare(result.password, admin.password);
   if (!isPasswordValid) return apiResponse(res, 401, false, "Invalid Credentials!");
 
   const accessToken = generateSignature({ email: admin.email, role: ROLE.ADMIN }, "1d");
