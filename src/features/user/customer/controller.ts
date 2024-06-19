@@ -25,7 +25,7 @@ export const customerRegistration = asyncHandler(async (req: Request, res: Respo
   const existingCustomer: IUser = await Customer.findOne({ email: customerBody.email });
 
   if (existingCustomer && existingCustomer.isVerified) {
-    return apiResponse(res, 400, false, "This customer already exists!");
+    throw "This customer already exists!";
   }
 
   if (existingCustomer) {
@@ -61,18 +61,18 @@ export const customerOtpVerify = asyncHandler(async (req: IApiRequest, res: Resp
   const result = await verifyOtpSchema.validateAsync(req.body);
 
   if (req.user.isVerified) {
-    return apiResponse(res, 400, false, "This customer already verified!");
+    throw "This customer already verified!";
   }
 
   const isVerified = req.user.otp === Number(result.otp) && req.user.otpExpiry > new Date();
-  if (!isVerified) return apiResponse(res, 400, false, "Invalid OTP!");
+  if (!isVerified) throw "Invalid OTP!";
 
   await Customer.updateOne(
     { email: req.user.email },
     { isVerified: true, verifiedAt: new Date(), otp: null, otpExpiry: null }
   );
 
-  const customer = await Customer.findOneAndUpdate(
+  const customer: any = await Customer.findOneAndUpdate(
     { email: req.user.email },
     { isVerified: true, verifiedAt: new Date(), otp: null, otpExpiry: null },
     {
@@ -106,7 +106,12 @@ export const customerOtpVerify = asyncHandler(async (req: IApiRequest, res: Resp
     expires: new Date(Date.now()),
   });
 
-  return apiResponse(res, 200, true, "Otp verified successfully!", customer);
+  const data = {
+    ...customer._doc,
+    role: ROLE.CUSTOMER,
+  };
+
+  return apiResponse(res, 200, true, "Otp verified successfully!", data);
 });
 
 /**
@@ -119,12 +124,10 @@ export const customerResendOtp = asyncHandler(async (req: IApiRequest, res: Resp
   const otp = getRandomInteger(100000, 999999);
   const otpExpiry = new Date(Date.now() + 2 * 60 * 1000); // 2 min
 
-  if (req.user.isVerified) {
-    return apiResponse(res, 400, false, "This customer already verified!");
-  }
+  if (req.user.isVerified) throw "This customer already verified!";
 
   if (req.user.otpExpiry > new Date()) {
-    return apiResponse(res, 400, false, "Please, wait for 2 minutes before resend otp!");
+    throw "Please, wait for 2 minutes before resend otp!";
   }
 
   await Customer.updateOne({ email: req.user.email }, { $set: { otp, otpExpiry } });
@@ -176,7 +179,7 @@ export const customerLogin = asyncHandler(async (req: Request, res: Response) =>
   // Remove Sensitive Data
   const data = exclude(customer._doc, ["password", "otp", "otpExpiry"]);
 
-  return apiResponse(res, 200, true, "Customer Login Successfully!", data);
+  return apiResponse(res, 200, true, "Customer Login Successfully!", { ...data, role: ROLE.CUSTOMER });
 });
 
 /**
@@ -189,5 +192,5 @@ export const customerProfile = asyncHandler(async (req: IApiRequest, res: Respon
   // Remove Sensitive Data
   const data = exclude(req.user, ["password", "otp", "otpExpiry"]);
 
-  return apiResponse(res, 200, true, "Customer Profile", data);
+  return apiResponse(res, 200, true, "Customer Profile", { ...data, role: ROLE.CUSTOMER });
 });

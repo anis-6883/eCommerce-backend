@@ -8,7 +8,7 @@ export const asyncHandler = (func: any) => async (req: Request, res: Response) =
   try {
     await func(req, res);
   } catch (err) {
-    console.error(err);
+    // console.error(err);
     if (err.isJoi) {
       const format: any = {};
       err.details.forEach((detail: any) => {
@@ -16,7 +16,7 @@ export const asyncHandler = (func: any) => async (req: Request, res: Response) =
       });
       return apiResponse(res, 400, false, "Invalid Request!", format);
     }
-    return apiResponse(res, 400, false, "Server Error!");
+    return apiResponse(res, 400, false, err || "Something went wrong!");
   }
 };
 

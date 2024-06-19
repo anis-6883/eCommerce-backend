@@ -5,6 +5,5 @@ export const REFRESH_TOKEN_KEY = "rft";
 export const ROLE = {
   ADMIN: "admin",
   RETAILER: "retailer",
-  SUB_ADMIN: "sub_admin",
   CUSTOMER: "customer",
 };
