@@ -127,7 +127,7 @@ export const customerResendOtp = asyncHandler(async (req: IApiRequest, res: Resp
   if (req.user.isVerified) throw "This customer already verified!";
 
   if (req.user.otpExpiry > new Date()) {
-    throw "Please, wait for 2 minutes before resend otp!";
+    throw "Try again, 2 minutes later!";
   }
 
   await Customer.updateOne({ email: req.user.email }, { $set: { otp, otpExpiry } });
